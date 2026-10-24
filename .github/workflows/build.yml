@@ -1,0 +1,37 @@
+name: Build APK
+on:
+  workflow_dispatch:
+    inputs:
+      app_id:
+        description: "App-ID"
+        default: "com.deinname.trainer"
+      app_name:
+        description: "App-Name"
+        default: "Trainer"
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+      - run: python3 build.py --apk --app-id "${{ github.event.inputs.app_id }}" --app-name "${{ github.event.inputs.app_name }}"
+      - name: Release mit APK
+        env:
+          GH_TOKEN: "${{ github.token }}"
+        run: |
+          APK="$(find . -path '*/apk/debug/app-debug.apk' | head -1)"
+          if [ -z "$APK" ]; then echo "Keine APK gefunden"; exit 1; fi
+          NAME="${{ github.event.inputs.app_name }}"
+          cp "$APK" "$NAME.apk" || cp "$APK" app.apk
+          FILE="$(ls *.apk | head -1)"
+          TAG="build-$(date +%Y%m%d-%H%M%S)"
+          gh release create "$TAG" "$FILE" --title "$NAME $TAG" --notes "Automatischer Build" --latest
